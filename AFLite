@@ -1,0 +1,59 @@
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from collections import defaultdict
+from tqdm.auto import tqdm
+import numpy as np
+
+
+def aflite(features: np.array, labels: np.array, n_partitions=20, upper_bound=5000, train_size=0.7, slice_num=200, predictability_treshold=0.8):
+    ''' Фильтр состязательной фильтрации.
+        Parametrs:
+            features (): матрица признаков, например, эмбеддинги бертоподобной модели, word2vec, TfIdf матрица и т.д.
+            labels (): вектор меток размерности n \times 1
+            n_partitions (): количество раундов разбиения
+            upper_bound (): сколько примеров должно остаться
+            train_size (): пропорция (если значение меньше единицы) или количество (если больше единицы) тренировочных данных в раунде
+            slice_num (): сколько примеров выбрасывать за проход
+            predictability_trashold (): порог оценки предсказуемости
+        Returns:
+            features (): Признаки.
+            labels (): Метки (напр. класса)
+    '''
+
+    # Пока количество примеров больше верхней границы. features.shape[0] - возвращает количество примеров.
+    while features.shape[0] > upper_bound:
+        acc = defaultdict(list)
+        # Цикл по количеству раундов разбиения.
+        for _ in tqdm(range(n_partitions)):
+            # Разбиение на обучающую и тестовую выборку.
+            x_tr, x_ts, y_tr, y_ts = train_test_split(features, labels, train_size=train_size)
+            # Модель - логистическая регрессия.
+            lr = LogisticRegression()
+            # Обучние модели.
+            lr.fit(x_tr, y_tr)
+            # Прогноз модели на тестовой выборке.
+            predicts = lr.predict(x_ts)
+            for i, pred, true in zip(range(y_ts.shape[0]), predicts, y_ts):
+                acc[i].append(1 if pred == true else 0)
+        removing_list = []
+        for idx, predictions in acc.items():
+            predictability_score = sum(predictions)/len(predictions)
+            if predictability_score > predictability_treshold:
+                removing_list.append((predictability_score, idx))
+        removing_list.sort(key=lambda x: x[0], )
+        removing_list = [x[1] for x in removing_list]
+        if len(removing_list) > slice_num:
+            removing_list = removing_list[:slice_num]
+            
+        else: 
+            print("Removing instances are not enough")
+            break
+        mask = np.ones(features.shape[0], dtype=bool)
+        mask[removing_list] = False
+        features = features[mask]
+        labels = labels[mask]
+        print("Dataset size remainig {}/{}".format(features.shape[0], upper_bound))
+        if features.shape[0] < train_size:
+            print("Dataset is less then required training size")
+            break
+    return features, labels
