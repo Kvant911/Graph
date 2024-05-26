@@ -101,24 +101,26 @@ class AFLite():
             acc = {}
             for _ in tqdm(range(self.n_partition)):
                 X_train, X_test, y_train, y_test = train_test_split(self.features, self.labels, train_size=self.train_size)
+
                 vectorizer = TfidfVectorizer()
+
                 X_train = vectorizer.fit_transform(X_train.values.flatten().tolist())
                 X_train = pd.DataFrame(X_train.toarray(), columns=vectorizer.get_feature_names_out())
+
                 X_test = vectorizer.transform(X_test.values.flatten().tolist())
-                X_test = pd.DataFrame(X_test.toarray(), columns=vectorizer.get_feature_names_out())
+                X_test = pd.DataFrame(X_test.toarray(), columns=vectorizer.get_feature_names_out(), index=y_test.index)
                 self.model.fit(X_train, y_train)
+
                 for index, feature in X_test.iterrows():
                     if index not in acc.keys():
                         acc[index] = []
                     pred = self.model.predict([feature.values.tolist()])
                     pred = pred.flatten()
                     pred = pred.tolist()
-                    try:
-                        fact = y_test.loc[index]
-                        fact = fact.values
-                        fact = fact.tollist()
-                    except:
-                        return [index, X_test, y_test, pred]
+                    fact = y_test.loc[index]
+                    fact = fact.values
+                    fact = fact.tolist()
+                        # return [index, X_test, y_test, pred]
                     estimation = self.__calculate_right_clf(fact, pred)
                     acc[index].append(estimation)
 
